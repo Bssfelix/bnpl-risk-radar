@@ -2,6 +2,17 @@ import streamlit as st
 import pandas as pd
 import joblib
 import numpy as np
+import sklearn.compose
+
+# --- 新加呢段嚟解決 _RemainderColsList 報錯 ---
+if not hasattr(sklearn.compose._column_transformer, '_RemainderColsList'):
+    class _RemainderColsList(list):
+        pass
+    sklearn.compose._column_transformer._RemainderColsList = _RemainderColsList
+# --------------------------------------------
+
+# 1. Page Configuration
+st.set_page_config(page_title="BNPL Risk Radar", layout="wide")
 
 # 1. Page Configuration
 st.set_page_config(page_title="BNPL Risk Radar", layout="wide")
