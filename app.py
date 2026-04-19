@@ -110,7 +110,7 @@ with col2:
     st.subheader("AI Risk Assessment")
     if st.button("Run AI Prediction", use_container_width=True):
         with st.spinner('Analyzing Credit Risk...'):
-            # 1. 欄位順序對齊
+            # 1. 定義欄位順序 (必須同 Member B 訓練時一樣)
             feature_order = [
                 'loan_amnt', 'annual_inc', 'dti', 'fico_range_low', 
                 'inq_last_6mths', 'open_acc', 'pub_rec', 'revol_bal', 
@@ -119,26 +119,31 @@ with col2:
                 'high_util_high_dti_flag', 'verification_status', 'purpose'
             ]
             
-            # 2. 強行翻譯 Map (Double Insurance)
-            ver_map = {'Not Verified': 0, 'Source Verified': 1, 'Verified': 2}
-            # 呢度用 lambda 確保如果仲係文字就轉數字，如果已經係數字就唔郁
-            final_input = input_df[feature_order].copy()
-            
-            if final_input['verification_status'].dtype == 'object':
-                final_input['verification_status'] = final_input['verification_status'].map(ver_map).fillna(0)
-            
-            # Purpose 部分同理 (如果原本係文字)
-            if final_input['purpose'].dtype == 'object':
-                # 簡單處理：如果仲係文字就全轉為 0 或者你可以加返完整 map
-                final_input['purpose'] = pd.factorize(final_input['purpose'])[0]
-
             try:
-                # 3. 執行運算 (確保全部轉為 float)
-                prediction = model_pipeline.predict(final_input.astype(float))[0]
-                probability = model_pipeline.predict_proba(final_input.astype(float))[0][1]
+                # 2. 獲取當前輸入並重新排序
+                final_input = input_df[feature_order].copy()
+                
+                # 3. 【暴力修復】如果仲係文字，即場夾硬轉做數字
+                # 處理 Verification Status
+                ver_map = {'Not Verified': 0.0, 'Source Verified': 1.0, 'Verified': 2.0}
+                if final_input['verification_status'].dtype == 'object':
+                    final_input['verification_status'] = final_input['verification_status'].map(ver_map).fillna(0.0)
+                
+                # 處理 Purpose (如果仲係文字就用 factorize 轉數字)
+                if final_input['purpose'].dtype == 'object':
+                    # 按照你 sidebar 的順序定義 map
+                    p_list = ['debt_consolidation', 'credit_card', 'home_improvement', 'other', 'major_purchase', 'medical', 'small_business', 'car', 'vacation', 'moving', 'house', 'wedding', 'renewable_energy']
+                    p_map = {val: float(i) for i, val in enumerate(p_list)}
+                    final_input['purpose'] = final_input['purpose'].map(p_map).fillna(0.0)
+
+                # 4. 強制全表轉為 Float 類型 (關鍵：解決 string to float 報錯)
+                final_input = final_input.astype(float)
+                
+                # 5. 執行運算
+                prediction = model_pipeline.predict(final_input)[0]
+                probability = model_pipeline.predict_proba(final_input)[0][1]
                 
                 st.write("---")
-                # ... 下面原本嘅 st.metric 唔使改 ...
                 if prediction == 0: 
                     st.metric(label="Risk Rating", value="LOW", delta=f"{probability:.2%} Default Prob.", delta_color="inverse")
                     st.success("✅ **Recommendation: APPROVE**")
@@ -149,8 +154,7 @@ with col2:
                     
             except Exception as e:
                 st.error(f"Prediction Error: {e}")
-                st.info("Technical Hint: Please ensure the 'load_model' patches are active in your code.")
-
+                st.info("Technical Hint: Double-check if feature encoding matches the model training set.")
 # 5. Business Value (Member C's Part)
 st.divider()
 st.subheader("💼 Business Impact & ROI Analysis")
