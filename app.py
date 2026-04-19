@@ -20,9 +20,31 @@ st.set_page_config(page_title="BNPL Risk Radar", layout="wide")
 # 2. Load the actual model from Member B
 # --- 第 10 至 13 行 ---
 @st.cache_resource
+@st.cache_resource
 def load_model():
-    # 刪除所有 C:/Users/... 這種路徑，只保留檔名
-    return joblib.load('logit_dashboard_v1.joblib')
+    # 1. Load 模型
+    model = joblib.load('logit_dashboard_v1.joblib')
+    
+    # 2. 解決 _fill_dtype 報錯嘅「巡房補丁」
+    # 呢段會掃描 Pipeline 裡面所有 SimpleImputer 並手動補齊缺失屬性
+    try:
+        # 檢查是否為 Pipeline 並遍歷步驟
+        if hasattr(model, 'named_steps'):
+            for name, step in model.named_steps.items():
+                # 處理 ColumnTransformer 裡面的子 Pipeline
+                if hasattr(step, 'transformers_'): 
+                    for _, transformer, _ in step.transformers_:
+                        if hasattr(transformer, 'named_steps'):
+                            for _, s in transformer.named_steps.items():
+                                if 'SimpleImputer' in str(type(s)) and not hasattr(s, '_fill_dtype'):
+                                    s._fill_dtype = np.float64
+                # 處理直接放在 Pipeline 裡的 SimpleImputer
+                elif 'SimpleImputer' in str(type(step)) and not hasattr(step, '_fill_dtype'):
+                    step._fill_dtype = np.float64
+    except Exception as e:
+        st.warning(f"Note: Model patch partially applied. {e}")
+        
+    return model
 
 model_pipeline = load_model()
 
