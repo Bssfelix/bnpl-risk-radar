@@ -67,25 +67,33 @@ def user_input_features():
     
     ver_status = st.sidebar.selectbox("Verification Status", ['Not Verified', 'Source Verified', 'Verified'])
 
-    # Prepare DataFrame with EXACT column names from Member B's model
+    # --- 關鍵修正：手動將文字類別轉為數字 (Label Encoding) ---
+    ver_status_map = {'Not Verified': 0, 'Source Verified': 1, 'Verified': 2}
+    purpose_map = {
+        'debt_consolidation': 0, 'credit_card': 1, 'home_improvement': 2, 'other': 3,
+        'major_purchase': 4, 'medical': 5, 'small_business': 6, 'car': 7, 
+        'vacation': 8, 'moving': 9, 'house': 10, 'wedding': 11, 'renewable_energy': 12
+    }
+
+    # 確保傳入 DataFrame 嘅全部係 Float 類型數字
     data = {
-        'loan_amnt': [loan_amnt],
-        'annual_inc': [annual_inc],
-        'dti': [dti],
-        'fico_range_low': [fico_score],
-        'inq_last_6mths': [0], # Default values for secondary features
-        'open_acc': [10],
-        'pub_rec': [0],
-        'revol_bal': [10000],
+        'loan_amnt': [float(loan_amnt)],
+        'annual_inc': [float(annual_inc)],
+        'dti': [float(dti)],
+        'fico_range_low': [float(fico_score)],
+        'inq_last_6mths': [0.0],
+        'open_acc': [10.0],
+        'pub_rec': [0.0],
+        'revol_bal': [10000.0],
         'revol_util': [30.0],
-        'mort_acc': [1],
-        'term_num': [36],
-        'issue_month': [6],
-        'loan_income_ratio_capped': [loan_amnt / (annual_inc + 1)],
+        'mort_acc': [1.0],
+        'term_num': [36.0],
+        'issue_month': [6.0],
+        'loan_income_ratio_capped': [float(loan_amnt / (annual_inc + 1))],
         'revol_bal_income_ratio_capped': [0.1],
-        'high_util_high_dti_flag': [0],
-        'verification_status': [ver_status],
-        'purpose': [purpose]
+        'high_util_high_dti_flag': [0.0],
+        'verification_status': [float(ver_status_map.get(ver_status, 0))],
+        'purpose': [float(purpose_map.get(purpose, 0))]
     }
     return pd.DataFrame(data)
 
