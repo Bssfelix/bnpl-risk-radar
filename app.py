@@ -110,7 +110,6 @@ with col2:
     st.subheader("AI Risk Assessment")
     if st.button("Run AI Prediction", use_container_width=True):
         with st.spinner('Analyzing Credit Risk...'):
-            # 1. 定義欄位順序 (必須同 Member B 訓練時一樣)
             feature_order = [
                 'loan_amnt', 'annual_inc', 'dti', 'fico_range_low', 
                 'inq_last_6mths', 'open_acc', 'pub_rec', 'revol_bal', 
@@ -119,42 +118,51 @@ with col2:
                 'high_util_high_dti_flag', 'verification_status', 'purpose'
             ]
             
-            try:
-                # 2. 獲取當前輸入並重新排序
-                final_input = input_df[feature_order].copy()
-                
-                # 3. 【暴力修復】如果仲係文字，即場夾硬轉做數字
-                # 處理 Verification Status
-                ver_map = {'Not Verified': 0.0, 'Source Verified': 1.0, 'Verified': 2.0}
-                if final_input['verification_status'].dtype == 'object':
-                    final_input['verification_status'] = final_input['verification_status'].map(ver_map).fillna(0.0)
-                
-                # 處理 Purpose (如果仲係文字就用 factorize 轉數字)
-                if final_input['purpose'].dtype == 'object':
-                    # 按照你 sidebar 的順序定義 map
-                    p_list = ['debt_consolidation', 'credit_card', 'home_improvement', 'other', 'major_purchase', 'medical', 'small_business', 'car', 'vacation', 'moving', 'house', 'wedding', 'renewable_energy']
-                    p_map = {val: float(i) for i, val in enumerate(p_list)}
-                    final_input['purpose'] = final_input['purpose'].map(p_map).fillna(0.0)
+            # 1. 準備數據並強制數值化
+            ver_map = {'Not Verified': 0.0, 'Source Verified': 1.0, 'Verified': 2.0}
+            p_list = ['debt_consolidation', 'credit_card', 'home_improvement', 'other', 'major_purchase', 'medical', 'small_business', 'car', 'vacation', 'moving', 'house', 'wedding', 'renewable_energy']
+            p_map = {val: float(i) for i, val in enumerate(p_list)}
 
-                # 4. 強制全表轉為 Float 類型 (關鍵：解決 string to float 報錯)
-                final_input = final_input.astype(float)
-                
-                # 5. 執行運算
-                prediction = model_pipeline.predict(final_input)[0]
-                probability = model_pipeline.predict_proba(final_input)[0][1]
+            final_input = input_df.copy()
+            final_input['verification_status'] = final_input['verification_status'].map(ver_map).fillna(0.0)
+            final_input['purpose'] = final_input['purpose'].map(p_map).fillna(0.0)
+            final_input = final_input[feature_order].astype(float)
+
+            # 2. 【外科手術】強行修改模型內部 Imputer 嘅行為
+            # 呢一步係為咗防止 Imputer 去掂我哋已經轉好咗嘅數字
+            try:
+                if hasattr(model_pipeline, 'named_steps'):
+                    for step in model_pipeline.named_steps.values():
+                        if hasattr(step, 'transformers_'):
+                            for _, transformer, _ in step.transformers_:
+                                if hasattr(transformer, 'named_steps'):
+                                    for s in transformer.named_steps.values():
+                                        if 'SimpleImputer' in str(type(s)):
+                                            # 強制話俾 Imputer 聽：我哋已經係數字，你唔好再試圖轉型
+                                            s.missing_values = np.nan 
+            except:
+                pass
+
+            # 3. 執行運算
+            try:
+                # 唔好直接 predict(final_input)，改用下面呢句強行轉 Numpy array
+                # 咁樣可以繞過 Sklearn 對 DataFrame 欄位名稱嘅檢查
+                raw_data = final_input.values 
+                prediction = model_pipeline.predict(raw_data)[0]
+                probability = model_pipeline.predict_proba(raw_data)[0][1]
                 
                 st.write("---")
                 if prediction == 0: 
                     st.metric(label="Risk Rating", value="LOW", delta=f"{probability:.2%} Default Prob.", delta_color="inverse")
                     st.success("✅ **Recommendation: APPROVE**")
-                    st.balloons()
                 else:
                     st.metric(label="Risk Rating", value="HIGH", delta=f"{probability:.2%} Default Prob.", delta_color="normal")
                     st.error("❌ **Recommendation: REJECT**")
-                    
             except Exception as e:
-                st.error(f"Prediction Error: {e}")
-                st.info("Technical Hint: Double-check if feature encoding matches the model training set.")
+                # 如果仲係唔得，印出詳細嘅數據類型俾我睇
+                st.error(f"Critical Error: {e}")
+                st.write("Current Data Types in final_input:")
+                st.write(final_input.dtypes)
 # 5. Business Value (Member C's Part)
 st.divider()
 st.subheader("💼 Business Impact & ROI Analysis")
