@@ -102,18 +102,35 @@ with col2:
     st.subheader("AI Risk Assessment")
     if st.button("Run AI Prediction", use_container_width=True):
         with st.spinner('Analyzing Credit Risk...'):
-            # Perform prediction using the loaded pipeline
-            prediction = model_pipeline.predict(input_df)[0]
-            probability = model_pipeline.predict_proba(input_df)[0][1] # Probability of default
+            # --- 核心修正：強制對齊 Member B 模型嘅 17 個 Feature 順序 ---
+            feature_order = [
+                'loan_amnt', 'annual_inc', 'dti', 'fico_range_low', 
+                'inq_last_6mths', 'open_acc', 'pub_rec', 'revol_bal', 
+                'revol_util', 'mort_acc', 'term_num', 'issue_month', 
+                'loan_income_ratio_capped', 'revol_bal_income_ratio_capped', 
+                'high_util_high_dti_flag', 'verification_status', 'purpose'
+            ]
             
-            st.write("---")
-            if prediction == 0: # Assuming 0 is "No Default"
-                st.metric(label="Risk Rating", value="LOW", delta=f"{probability:.2%} Default Prob.")
-                st.success("✅ **Recommendation: APPROVE**")
-                st.balloons()
-            else:
-                st.metric(label="Risk Rating", value="HIGH", delta=f"{probability:.2%} Default Prob.")
-                st.error("❌ **Recommendation: REJECT**")
+            try:
+                # 確保傳入模型嘅 DataFrame 欄位順序 100% 正確
+                final_input = input_df[feature_order]
+                
+                # 執行運算
+                prediction = model_pipeline.predict(final_input)[0]
+                probability = model_pipeline.predict_proba(final_input)[0][1]
+                
+                st.write("---")
+                if prediction == 0: 
+                    st.metric(label="Risk Rating", value="LOW", delta=f"{probability:.2%} Default Prob.", delta_color="inverse")
+                    st.success("✅ **Recommendation: APPROVE**")
+                    st.balloons()
+                else:
+                    st.metric(label="Risk Rating", value="HIGH", delta=f"{probability:.2%} Default Prob.", delta_color="normal")
+                    st.error("❌ **Recommendation: REJECT**")
+                    
+            except Exception as e:
+                st.error(f"Prediction Error: {e}")
+                st.info("Technical Hint: Please ensure the 'load_model' patches are active in your code.")
 
 # 5. Business Value (Member C's Part)
 st.divider()
