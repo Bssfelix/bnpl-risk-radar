@@ -110,7 +110,7 @@ with col2:
     st.subheader("AI Risk Assessment")
     if st.button("Run AI Prediction", use_container_width=True):
         with st.spinner('Analyzing Credit Risk...'):
-            # --- 核心修正：強制對齊 Member B 模型嘅 17 個 Feature 順序 ---
+            # 1. 欄位順序對齊
             feature_order = [
                 'loan_amnt', 'annual_inc', 'dti', 'fico_range_low', 
                 'inq_last_6mths', 'open_acc', 'pub_rec', 'revol_bal', 
@@ -119,15 +119,26 @@ with col2:
                 'high_util_high_dti_flag', 'verification_status', 'purpose'
             ]
             
+            # 2. 強行翻譯 Map (Double Insurance)
+            ver_map = {'Not Verified': 0, 'Source Verified': 1, 'Verified': 2}
+            # 呢度用 lambda 確保如果仲係文字就轉數字，如果已經係數字就唔郁
+            final_input = input_df[feature_order].copy()
+            
+            if final_input['verification_status'].dtype == 'object':
+                final_input['verification_status'] = final_input['verification_status'].map(ver_map).fillna(0)
+            
+            # Purpose 部分同理 (如果原本係文字)
+            if final_input['purpose'].dtype == 'object':
+                # 簡單處理：如果仲係文字就全轉為 0 或者你可以加返完整 map
+                final_input['purpose'] = pd.factorize(final_input['purpose'])[0]
+
             try:
-                # 確保傳入模型嘅 DataFrame 欄位順序 100% 正確
-                final_input = input_df[feature_order]
-                
-                # 執行運算
-                prediction = model_pipeline.predict(final_input)[0]
-                probability = model_pipeline.predict_proba(final_input)[0][1]
+                # 3. 執行運算 (確保全部轉為 float)
+                prediction = model_pipeline.predict(final_input.astype(float))[0]
+                probability = model_pipeline.predict_proba(final_input.astype(float))[0][1]
                 
                 st.write("---")
+                # ... 下面原本嘅 st.metric 唔使改 ...
                 if prediction == 0: 
                     st.metric(label="Risk Rating", value="LOW", delta=f"{probability:.2%} Default Prob.", delta_color="inverse")
                     st.success("✅ **Recommendation: APPROVE**")
