@@ -144,25 +144,30 @@ with col2:
                 pass
 
             # 3. 執行運算
+            # 3. 執行運算
             try:
-                # 唔好直接 predict(final_input)，改用下面呢句強行轉 Numpy array
-                # 咁樣可以繞過 Sklearn 對 DataFrame 欄位名稱嘅檢查
-                raw_data = final_input.values 
-                prediction = model_pipeline.predict(raw_data)[0]
-                probability = model_pipeline.predict_proba(raw_data)[0][1]
+                # --- 關鍵修正：俾返個「全數字」嘅 DataFrame 佢，唔好用 .values ---
+                # 確保 final_input 已經係 float，並且欄位名係正確嘅
+                clean_df = final_input.astype(float)
+                
+                prediction = model_pipeline.predict(clean_df)[0]
+                probability = model_pipeline.predict_proba(clean_df)[0][1]
                 
                 st.write("---")
                 if prediction == 0: 
                     st.metric(label="Risk Rating", value="LOW", delta=f"{probability:.2%} Default Prob.", delta_color="inverse")
                     st.success("✅ **Recommendation: APPROVE**")
+                    st.balloons()
                 else:
                     st.metric(label="Risk Rating", value="HIGH", delta=f"{probability:.2%} Default Prob.", delta_color="normal")
                     st.error("❌ **Recommendation: REJECT**")
+                    
             except Exception as e:
-                # 如果仲係唔得，印出詳細嘅數據類型俾我睇
-                st.error(f"Critical Error: {e}")
-                st.write("Current Data Types in final_input:")
-                st.write(final_input.dtypes)
+                # 如果仲係報 string to float，我哋睇吓到底係邊個位
+                st.error(f"Final Debug Error: {e}")
+                # 呢句會幫你喺 Dashboard 印出嚟睇吓係咪真係全部變晒數字
+                st.write("Checking data before feeding to model:")
+                st.dataframe(clean_df.head())
 # 5. Business Value (Member C's Part)
 st.divider()
 st.subheader("💼 Business Impact & ROI Analysis")
