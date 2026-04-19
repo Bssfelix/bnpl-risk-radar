@@ -118,36 +118,27 @@ with col2:
                 'high_util_high_dti_flag', 'verification_status', 'purpose'
             ]
             
-            # 1. 準備數據並強制數值化
-            ver_map = {'Not Verified': 0.0, 'Source Verified': 1.0, 'Verified': 2.0}
-            p_list = ['debt_consolidation', 'credit_card', 'home_improvement', 'other', 'major_purchase', 'medical', 'small_business', 'car', 'vacation', 'moving', 'house', 'wedding', 'renewable_energy']
-            p_map = {val: float(i) for i, val in enumerate(p_list)}
+            # 1. 攞一份乾淨嘅 Copy
+            final_input = input_df[feature_order].copy()
+            
+            # 2. 【絕招】唔理邊一 Column，只要見到呢啲字就全表替換
+            # 咁樣可以防止「明明改咗 A 欄位，但模型其實係睇緊 B 欄位」嘅情況
+            replacements = {
+                'Not Verified': 0.0, 'Source Verified': 1.0, 'Verified': 2.0,
+                'debt_consolidation': 0.0, 'credit_card': 1.0, 'home_improvement': 2.0,
+                'other': 3.0, 'major_purchase': 4.0, 'medical': 5.0, 'small_business': 6.0,
+                'car': 7.0, 'vacation': 8.0, 'moving': 9.0, 'house': 10.0, 
+                'wedding': 11.0, 'renewable_energy': 12.0
+            }
+            final_input = final_input.replace(replacements)
 
-            final_input = input_df.copy()
-            final_input['verification_status'] = final_input['verification_status'].map(ver_map).fillna(0.0)
-            final_input['purpose'] = final_input['purpose'].map(p_map).fillna(0.0)
-            final_input = final_input[feature_order].astype(float)
+            # 3. 強行檢查：如果仲有任何 Object (文字) 類型，全部變做 0
+            for col in final_input.columns:
+                if final_input[col].dtype == 'object':
+                    final_input[col] = pd.to_numeric(final_input[col], errors='coerce').fillna(0.0)
 
-            # 2. 【外科手術】強行修改模型內部 Imputer 嘅行為
-            # 呢一步係為咗防止 Imputer 去掂我哋已經轉好咗嘅數字
             try:
-                if hasattr(model_pipeline, 'named_steps'):
-                    for step in model_pipeline.named_steps.values():
-                        if hasattr(step, 'transformers_'):
-                            for _, transformer, _ in step.transformers_:
-                                if hasattr(transformer, 'named_steps'):
-                                    for s in transformer.named_steps.values():
-                                        if 'SimpleImputer' in str(type(s)):
-                                            # 強制話俾 Imputer 聽：我哋已經係數字，你唔好再試圖轉型
-                                            s.missing_values = np.nan 
-            except:
-                pass
-
-            # 3. 執行運算
-            # 3. 執行運算
-            try:
-                # --- 關鍵修正：俾返個「全數字」嘅 DataFrame 佢，唔好用 .values ---
-                # 確保 final_input 已經係 float，並且欄位名係正確嘅
+                # 4. 確保全表係 float64
                 clean_df = final_input.astype(float)
                 
                 prediction = model_pipeline.predict(clean_df)[0]
@@ -163,11 +154,12 @@ with col2:
                     st.error("❌ **Recommendation: REJECT**")
                     
             except Exception as e:
-                # 如果仲係報 string to float，我哋睇吓到底係邊個位
                 st.error(f"Final Debug Error: {e}")
-                # 呢句會幫你喺 Dashboard 印出嚟睇吓係咪真係全部變晒數字
-                st.write("Checking data before feeding to model:")
-                st.dataframe(clean_df.head())
+                # 睇吓到底係邊個位仲有字
+                st.write("Data Types After Replacement:")
+                st.write(final_input.dtypes)
+                st.write("First Row of Data:")
+                st.write(final_input.iloc[0].to_dict())
 # 5. Business Value (Member C's Part)
 st.divider()
 st.subheader("💼 Business Impact & ROI Analysis")
